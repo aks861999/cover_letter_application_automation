@@ -5,7 +5,7 @@ No web search. Pure synthesis task.
 Prompt reconstructed from user's raw notes using CRISPE framework.
 
 Task  : Synthesise all research + CV into RAW bullet-point ideas for
-        the cover letter — across 7 dimensions.
+        the cover letter — across 5 dimensions.
         WARNING: Does NOT write the cover letter itself.
 Input : business_problem_md, culture_md, skills_cv_md (from state)
 Output: unorganised_cover_letter_content.md
@@ -45,7 +45,7 @@ def run(
         skills_cv_md: Agent 2 output (CV with skills).
 
     Returns:
-        Markdown string with raw bullet-point ideas across 7 dimensions.
+        Markdown string with raw bullet-point ideas across 5 dimensions.
     """
     out_file = output_dir / "unorganised_cover_letter_content.md"  # agent-specific name
 

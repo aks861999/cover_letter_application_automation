@@ -32,7 +32,7 @@ Analyse all three documents carefully, then generate raw cover letter MATERIAL a
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 S — STEPS (follow for each dimension)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-For each of the 7 dimensions: read the relevant documents → identify the specific connection → express it as a concrete bullet point.
+For each of the 5 dimensions: read the relevant documents → identify the specific connection → express it as a concrete bullet point.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 P — PERSONA
@@ -107,7 +107,7 @@ g) TEAM FIT SIGNALS: What about the candidate's working style, background, or pr
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT FORMAT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Return ONLY bullet points organised under the 7 dimension headings above.
+Return ONLY bullet points organised under the 5 dimension headings above.
 No prose paragraphs. No finished cover letter text. 
 Each bullet must be a first-person rough hook — not a third-person description of the candidate.
 Be specific, honest, and concrete. Generic advice is useless here.

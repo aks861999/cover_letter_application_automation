@@ -22,7 +22,6 @@ from google.genai import types
 from state import CoverLetterState
 from prompts.agent_2 import SKILLS_SYSTEM_PROMPT
 
-CV_FILE    = _ROOT / "cv.md"
 OUTPUT_FILE = _ROOT / "outputs" / "skills_added_cv.md"
 
 
@@ -52,14 +51,15 @@ def _insert_skills_into_cv(cv_content: str, skills_block: str) -> str:
 
 
 
-def run(api_key: str, job_description: str, output_dir: Path) -> str:
+def run(api_key: str, job_description: str, cv_selection: str, output_dir: Path) -> str:
+
     """
     Execute Agent 2: generate structured skills section and merge with cv.md.
 
     Args:
         api_key: Gemini API key.
         job_description: Full JD text.
-
+        cv_selection: Name of the CV file to use.
     Returns:
         Merged CV markdown string.
     """
@@ -89,13 +89,15 @@ def run(api_key: str, job_description: str, output_dir: Path) -> str:
     skills_section = skills_response.text
 
     # ── Step 2: Read the existing CV ─────────────────────────────────────
-    if CV_FILE.exists():
-        cv_content = CV_FILE.read_text(encoding="utf-8")
+    # ── Step 2: Read the existing CV ─────────────────────────────────────────────
+    cv_file = _ROOT / cv_selection
+    if cv_file.exists():
+        cv_content = cv_file.read_text(encoding="utf-8")
     else:
         cv_content = (
-            "# [Candidate Name]\n\n"
-            "⚠️ cv.md not found. Please place your CV (without skills/profile summary) "
-            "as cv.md in the project root directory and re-run.\n\n"
+            f"# [Candidate Name]\n\n"
+            f"⚠️ {cv_selection} not found. Please place your CV (without skills/profile summary) "
+            f"as {cv_selection} in the project root directory and re-run.\n\n"
             "## Work Experience\n[placeholder]\n\n"
             "## Education\n[placeholder]\n"
         )
@@ -111,7 +113,7 @@ def run(api_key: str, job_description: str, output_dir: Path) -> str:
 def node(state: CoverLetterState) -> dict:
     try:
         output_dir = Path(state["run_output_dir"])
-        result = run(state["api_key"], state["job_description"], output_dir)
+        result = run(state["api_key"], state["job_description"], state["cv_selection"], output_dir)
         return {
             "skills_cv_md": result,
             "current_agent": "agent_2_complete",

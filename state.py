@@ -14,6 +14,8 @@ class CoverLetterState(TypedDict):
     company_name: str   # Company name entered directly by user via UI
     run_output_dir: str 
     job_description: str            # Full job description pasted by user
+    cv_selection: str          # ← ADD THIS — "cv_akash.md" or "cv_shreya.md"
+
 
     # ── Agent Outputs (saved as intermediate .md files) ───────────────────
     business_problem_md: str        # Agent 1: core business problem + how solved

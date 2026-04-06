@@ -47,6 +47,7 @@ _session = {
     "agent_4_output": None,
     "agent_5_output": None,
     "agent_6_output": None,
+    "cv_selection": "cv_akash.md", 
 }
 
 
@@ -128,14 +129,15 @@ def run_single_agent_1(api_key, job_description):
         return "", f"❌ Agent 1 failed: {e}"
 
 
-def run_single_agent_2(api_key, job_description):
+def run_single_agent_2(api_key, job_description, cv_selection):
+    _session["cv_selection"] = cv_selection 
     run_dir = _session.get("run_output_dir")
     if not run_dir:
         run_dir = str(make_run_dir(_ROOT / "outputs", "manual_run"))
         _session["run_output_dir"] = run_dir
         _setup_run_logging(Path(run_dir))
     try:
-        result = run_agent_2(api_key, job_description, Path(run_dir))
+        result = run_agent_2(api_key, job_description, cv_selection, Path(run_dir))
         _session["agent_2_output"] = result
         return result, f"✅ Agent 2 complete — saved to {run_dir}"
     except Exception as e:
@@ -213,7 +215,7 @@ def run_single_agent_6(api_key):
 
 
 # ── Pipeline Generator ────────────────────────────────────────────────────────
-def run_pipeline(api_key: str, job_description: str, company_name: str):
+def run_pipeline(api_key: str, job_description: str, company_name: str, cv_selection: str):
     """
     Generator function that runs the full 6-agent LangGraph pipeline
     and yields UI updates after each agent completes.
@@ -256,6 +258,7 @@ def run_pipeline(api_key: str, job_description: str, company_name: str):
         "errors":                [],
         "current_agent":         "starting",
         "company_name":          company_name.strip(),
+        "cv_selection":          cv_selection,  
         "run_output_dir":        str(run_dir),
     }
 
@@ -364,7 +367,7 @@ def build_ui() -> gr.Blocks:
                 | 1 | Research core business problem + how company solved it | ✅ Mandatory |
                 | 2 | Generate JD-aligned skills section + merge into your CV | ❌ |
                 | 3 | Research company vision, culture & values | ✅ Mandatory |
-                | 4 | Generate raw cover letter ideas across 7 dimensions | ❌ |
+                | 4 | Generate raw cover letter ideas across 5 dimensions | ❌ |
                 | 5 | Organise ideas into 4 cover letter paragraphs | ❌ |
                 | 6 | Write final cover letter (with self-critique loop) | ❌ |
 
@@ -398,6 +401,13 @@ def build_ui() -> gr.Blocks:
                     placeholder="e.g. Siemens, Allianz, Fraunhofer, BMW...",
                     lines=1,
                     info="Exact company name — used by Agent 3 for culture research.",
+                )
+                # ADD this right after:
+                cv_dropdown = gr.Dropdown(
+                    choices=["cv_akash.md", "cv_shreya.md"],
+                    value="cv_akash.md",
+                    label="👤 Select CV Profile",
+                    info="Choose whose CV to use for this application.",
                 )
                 run_btn = gr.Button(
                     "🚀 Generate Cover Letter",
@@ -469,13 +479,13 @@ def build_ui() -> gr.Blocks:
         # ── Wire Run Button to Generator ──────────────────────────────────
         run_btn.click(
             fn=run_pipeline,
-            inputs=[api_key_input, jd_input, company_name_input],
+            inputs=[api_key_input, jd_input, company_name_input, cv_dropdown],  # ← add cv_dropdown
             outputs=[status_box, *tab_outputs, download_file],
             show_progress="hidden",
         )
 
         btn_a1.click(run_single_agent_1, inputs=[api_key_input, jd_input],           outputs=[tab_outputs[0], agent_status_box])
-        btn_a2.click(run_single_agent_2, inputs=[api_key_input, jd_input],           outputs=[tab_outputs[1], agent_status_box])
+        btn_a2.click(run_single_agent_2, inputs=[api_key_input, jd_input, cv_dropdown],           outputs=[tab_outputs[1], agent_status_box])
         btn_a3.click(run_single_agent_3, inputs=[api_key_input, company_name_input], outputs=[tab_outputs[2], agent_status_box])
         btn_a4.click(run_single_agent_4, inputs=[api_key_input],                     outputs=[tab_outputs[3], agent_status_box])
         btn_a5.click(run_single_agent_5, inputs=[api_key_input],                     outputs=[tab_outputs[4], agent_status_box])

@@ -1,3 +1,6 @@
 .env
 outputs/
 __pycache__/
+cv_akash.md
+cv_shreya.md
+*/__pycache__/*
