@@ -23,50 +23,28 @@ from google.genai import types
 from state import CoverLetterState
 from utils import generate_with_retry, MaxRetriesExceeded
 
+from pydantic import BaseModel, field_validator
+from prompts.agent_5 import SYSTEM_PROMPT
+
+class OrganisedSections(BaseModel):
+    einleitung: list[str]
+    hauptteil:  list[str]
+    companyfit: list[str]
+    schluss:    list[str]
+
+    @field_validator("einleitung", "hauptteil", "companyfit", "schluss", mode="before")
+    @classmethod
+    def coerce_to_list(cls, v):
+        # If LLM returns a string instead of a list, wrap it
+        if isinstance(v, str):
+            return [v]
+        return v
+
+
+
 OUTPUT_FILE = _ROOT / "outputs" / "super_organised_content_for_cover_letter.md"
 
-# ── System Prompt ─────────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """You are a document structure organiser. Your ONLY task is to redistribute existing bullet points into 4 labelled sections for a cover letter.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ABSOLUTE CONSTRAINTS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. DO NOT write new content — not a single new word beyond what exists in the input
-2. DO NOT improve, polish, or rephrase any bullet points — take them as-is
-3. DO NOT add new bullet points not already present in the input
-4. DO NOT remove bullet points — every point from the input must appear in exactly one output section
-5. ONLY redistribute existing bullets into the best-fit section
-6. PRESERVE the first-person voice of every bullet exactly — never convert "I built..." or "I led..." to "Candidate built..." or  "The candidate has..."
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-THE 4 TARGET SECTIONS AND THEIR CONTENT CRITERIA
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-"einleitung" — Opening section (~50 words of material, max 3 key ideas)
-  → Include bullets about: motivation for applying, why this specific company, how the role was found, genuine excitement for what the company does
-
-"hauptteil" — Main body section (~150–200 words of material, 3 sub-paragraphs worth)
-  → Include bullets about: skills matching job requirements, concrete experiences as proof of ability, 5-year growth narrative, specific technical contributions, JD coverage evidence, profile fit
-
-"company_fit" — Company-fit paragraph (~2 lines of material)
-  → Include bullets about: values alignment with company culture, working style matching company's team culture, specific cultural connection points
-
-"schluss" — Closing section (~50 words of material)
-  → Include bullets about: interview request, availability, active closing sentiment, preparation signals that belong at the end
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-RETURN FORMAT (MANDATORY)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Return a valid JSON object with exactly these 4 keys.
-The values must be arrays of strings (the redistributed bullet points).
-No markdown fences. No preamble. No explanation. ONLY the JSON object.
-
-{
-  "einleitung": ["bullet point text as-is", "another bullet"],
-  "hauptteil": ["bullet point text as-is", "another bullet", "and so on"],
-  "company_fit": ["bullet point text as-is"],
-  "schluss": ["bullet point text as-is"]
-}"""
 
 
 def _parse_json_response(raw_text: str) -> dict:
@@ -91,15 +69,12 @@ def _parse_json_response(raw_text: str) -> dict:
                 data[key] = []
             elif not isinstance(data[key], list):
                 data[key] = [str(data[key])]
-        return data
-    except json.JSONDecodeError:
-        # Fallback: put everything in hauptteil so no content is lost
-        return {
-            "einleitung": [],
-            "hauptteil": [raw_text],
-            "company_fit": [],
-            "schluss": [],
-        }
+        
+        validated = OrganisedSections(**data)
+        return validated.model_dump()
+    except (json.JSONDecodeError, ValueError) as e:
+    # ValueError catches Pydantic ValidationError too
+        return {"einleitung": [], "hauptteil": [rawtext], "companyfit": [], "schluss": []}
 
 
 def _sections_to_markdown(data: dict) -> str:
@@ -131,7 +106,7 @@ def _sections_to_markdown(data: dict) -> str:
     return "\n".join(md_lines)
 
 
-def run(api_key: str, unorganised_points_md: str) -> str:
+def run(api_key: str, unorganised_points_md: str, output_dir: Path) -> str:
     """
     Execute Agent 5: organise bullet points into 4 cover letter sections.
 
@@ -142,7 +117,8 @@ def run(api_key: str, unorganised_points_md: str) -> str:
     Returns:
         Markdown string with content mapped to 4 cover letter sections.
     """
-    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    out_file = output_dir / "super_organised_content_for_cover_letter.md"  # agent-specific name
+
     client = genai.Client(api_key=api_key)
 
     user_message = (
@@ -168,14 +144,15 @@ def run(api_key: str, unorganised_points_md: str) -> str:
     raw_text = response.text
     data = _parse_json_response(raw_text)
     result = _sections_to_markdown(data)
-    OUTPUT_FILE.write_text(result, encoding="utf-8")
+    out_file.write_text(result, encoding="utf-8")
     return result
 
 
 # ── LangGraph Node Wrapper ────────────────────────────────────────────────────
 def node(state: CoverLetterState) -> dict:
     try:
-        result = run(state["api_key"], state["unorganised_points_md"])
+        output_dir = Path(state["run_output_dir"])
+        result = run(state["api_key"], state["unorganised_points_md"], output_dir)
         return {
             "organised_sections_md": result,
             "current_agent": "agent_5_complete",

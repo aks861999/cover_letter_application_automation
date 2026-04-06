@@ -20,54 +20,10 @@ if str(_ROOT) not in sys.path:
 from google import genai
 from google.genai import types
 from state import CoverLetterState
+from prompts.agent_2 import SKILLS_SYSTEM_PROMPT
 
 CV_FILE    = _ROOT / "cv.md"
 OUTPUT_FILE = _ROOT / "outputs" / "skills_added_cv.md"
-
-# ── System Prompt 1: Skills Section Generator ────────────────────────────────
-SKILLS_SYSTEM_PROMPT = """You are an expert CV writer and career strategist, specialising in mentioned roles in the <Job Description> in the German and European job market.
-
-YOUR TASK:
-Generate a professional SKILLS SECTION for a CV, perfectly aligned with the provided Job Description.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STRUCTURE REQUIREMENTS (MANDATORY — no deviations)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- Exactly 4 Major Skill Groups with clear, descriptive heading names derived from the JD
-- Each Major Skill Group must have exactly 2 or 3 Sub-Skill Headers
-- Each Sub-Skill Header must have at least 5 specific sub-skills (specific tools, frameworks, methods, domain-specific concepts, competencies — not generic terms like "programming" or "data analysis")
-- Sub-skills are listed as comma-separated items — NO bullet points, NO sentences, NO explanations
-- Priority order: first cover all skills explicitly mentioned in the JD, then add skills implied by the role's project context
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EXACT OUTPUT FORMAT (copy this structure — replace placeholders)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
----SKILLS START---
-
-## Skills
-
-**[Major Skill Group 1]**
-*[Sub-Header 1 — ]:* Skill1, Skill2, Skill3, Skill4, Skill5
-*[Sub-Header 2 — ]:* Skill1, Skill2, Skill3, Skill4, Skill5
-*[Sub-Header 3 — ]:* Skill1, Skill2, Skill3, Skill4, Skill5
-
-**[Major Skill Group 2]**
-*[Sub-Header 1]:* Skill1, Skill2, Skill3, Skill4, Skill5
-*[Sub-Header 2]:* Skill1, Skill2, Skill3, Skill4, Skill5
-
-**[Major Skill Group 3]**
-*[Sub-Header 1]:* Skill1, Skill2, Skill3, Skill4, Skill5
-*[Sub-Header 2]:* Skill1, Skill2, Skill3, Skill4, Skill5
-*[Sub-Header 3]:* Skill1, Skill2, Skill3, Skill4, Skill5
-
-**[Major Skill Group 4]**
-*[Sub-Header 1]:* Skill1, Skill2, Skill3, Skill4, Skill5
-*[Sub-Header 2]:* Skill1, Skill2, Skill3, Skill4, Skill5
-
----SKILLS END---
-
-IMPORTANT: Output ONLY the block above between ---SKILLS START--- and ---SKILLS END---. No explanations, no preamble, no extra text."""
 
 
 
@@ -96,7 +52,7 @@ def _insert_skills_into_cv(cv_content: str, skills_block: str) -> str:
 
 
 
-def run(api_key: str, job_description: str) -> str:
+def run(api_key: str, job_description: str, output_dir: Path) -> str:
     """
     Execute Agent 2: generate structured skills section and merge with cv.md.
 
@@ -107,7 +63,8 @@ def run(api_key: str, job_description: str) -> str:
     Returns:
         Merged CV markdown string.
     """
-    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    out_file = output_dir / "skills_added_cv.md"  # agent-specific name
+
     client = genai.Client(api_key=api_key)
 
     # ── Step 1: Generate the skills section ──────────────────────────────
@@ -146,14 +103,15 @@ def run(api_key: str, job_description: str) -> str:
     # Pure Python merge — no LLM call
     skills_block = _extract_skills_block(skills_section)
     result = _insert_skills_into_cv(cv_content, skills_block)
-    OUTPUT_FILE.write_text(result, encoding="utf-8")
+    out_file.write_text(result, encoding="utf-8")
     return result
 
 
 # ── LangGraph Node Wrapper ────────────────────────────────────────────────────
 def node(state: CoverLetterState) -> dict:
     try:
-        result = run(state["api_key"], state["job_description"])
+        output_dir = Path(state["run_output_dir"])
+        result = run(state["api_key"], state["job_description"], output_dir)
         return {
             "skills_cv_md": result,
             "current_agent": "agent_2_complete",

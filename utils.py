@@ -1,6 +1,20 @@
 import time
 import logging
 
+
+from pathlib import Path
+
+from datetime import datetime
+import re
+
+def make_run_dir(base_output: Path, company_name: str) -> Path:
+    """Create outputs/<company_name>_yyyy_mm_dd_hh_mm_ss/ and return the path."""
+    safe_name = re.sub(r"[^\w\-]", "_", company_name.strip())  # sanitise for filesystem
+    timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+    run_dir = base_output / f"{safe_name}_{timestamp}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir
+
 logger = logging.getLogger(__name__)
 
 # Errors worth retrying — transient server-side failures

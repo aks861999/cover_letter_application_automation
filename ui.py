@@ -21,6 +21,38 @@ from pathlib import Path
 import gradio as gr
 from graph import graph
 from state import CoverLetterState
+from utils import make_run_dir   # add to imports at top
+
+_ROOT = Path(__file__).parent    
+
+
+from agents.agent_1_business_problem import run as run_agent_1
+from agents.agent_2_cv_skills        import run as run_agent_2
+from agents.agent_3_company_culture  import run as run_agent_3
+from agents.agent_4_cover_points     import run as run_agent_4
+from agents.agent_5_organise         import run as run_agent_5
+from agents.agent_6_write_letter     import run as run_agent_6
+
+
+
+# In-memory session state — persists for duration of Gradio session
+_session = {
+    "api_key": "",
+    "job_description": "",
+    "company_name": "",
+    "agent_1_output": None,
+    "agent_2_output": None,
+    "agent_3_output": None,
+    "agent_4_output": None,
+    "agent_5_output": None,
+    "agent_6_output": None,
+}
+
+
+
+
+
+
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 AGENT_LABELS = [
@@ -42,7 +74,105 @@ AGENT_STATE_KEYS = [
     "final_cover_letter_md",
 ]
 
-FINAL_OUTPUT_PATH = Path("outputs/final_cover_letter.md")
+
+
+
+def run_single_agent_1(api_key, job_description):
+    run_dir = _session.get("run_output_dir")
+    if not run_dir:
+        # No pipeline run yet — create a fresh dir with a placeholder name
+        run_dir = str(make_run_dir(_ROOT / "outputs", "manual_run"))
+        _session["run_output_dir"] = run_dir
+    
+
+    try:
+        result = run_agent_1(api_key, job_description, Path(run_dir))
+        _session["agent_1_output"] = result
+        return result, f"✅ Agent 1 complete — saved to {run_dir}"
+    except Exception as e:
+        return "", f"❌ Agent 1 failed: {e}"
+
+def run_single_agent_2(api_key, job_description):
+    run_dir = _session.get("run_output_dir")
+    if not run_dir:
+        # No pipeline run yet — create a fresh dir with a placeholder name
+        run_dir = str(make_run_dir(_ROOT / "outputs", "manual_run"))
+        _session["run_output_dir"] = run_dir
+
+    try:
+        result = run_agent_2(api_key, job_description, Path(run_dir))
+        _session["agent_2_output"] = result
+        return result, f"✅ Agent 2 complete — saved to {run_dir}"
+    except Exception as e:
+        return "", f"❌ Agent 2 failed: {e}"
+
+def run_single_agent_3(api_key, company_name):
+    run_dir = _session.get("run_output_dir")
+    if not run_dir:
+        # No pipeline run yet — create a fresh dir with a placeholder name
+        run_dir = str(make_run_dir(_ROOT / "outputs", "manual_run"))
+        _session["run_output_dir"] = run_dir
+
+    try:
+        result = run_agent_3(api_key, company_name, Path(run_dir))
+        _session["agent_3_output"] = result
+        return result, f"✅ Agent 3 complete — saved to {run_dir}"
+    except Exception as e:
+        return "", f"❌ Agent 3 failed: {e}"
+
+def run_single_agent_4(api_key):
+    run_dir = _session.get("run_output_dir")
+    if not run_dir:
+        # No pipeline run yet — create a fresh dir with a placeholder name
+        run_dir = str(make_run_dir(_ROOT / "outputs", "manual_run"))
+        _session["run_output_dir"] = run_dir
+
+    a1 = _session["agent_1_output"]
+    a2 = _session["agent_2_output"]
+    a3 = _session["agent_3_output"]
+    if not all([a1, a2, a3]):
+        return "", "⚠️  Agent 4 needs Agents 1, 2, 3 to have run first"
+    try:
+        result = run_agent_4(api_key, a1, a3, a2)
+        _session["agent_4_output"] = result
+        return result, f"✅ Agent 4 complete — saved to {run_dir}"
+    except Exception as e:
+        return "", f"❌ Agent 4 failed: {e}"
+
+def run_single_agent_5(api_key):
+    run_dir = _session.get("run_output_dir")
+    if not run_dir:
+        # No pipeline run yet — create a fresh dir with a placeholder name
+        run_dir = str(make_run_dir(_ROOT / "outputs", "manual_run"))
+        _session["run_output_dir"] = run_dir
+
+    a4 = _session["agent_4_output"]
+    if not a4:
+        return "", "⚠️  Agent 5 needs Agent 4 to have run first"
+    try:
+        result = run_agent_5(api_key, a4)
+        _session["agent_5_output"] = result
+        return result, f"✅ Agent 5 complete — saved to {run_dir}"
+    except Exception as e:
+        return "", f"❌ Agent 5 failed: {e}"
+
+def run_single_agent_6(api_key):
+    run_dir = _session.get("run_output_dir")
+    if not run_dir:
+        # No pipeline run yet — create a fresh dir with a placeholder name
+        run_dir = str(make_run_dir(_ROOT / "outputs", "manual_run"))
+        _session["run_output_dir"] = run_dir
+
+    a5 = _session["agent_5_output"]
+    if not a5:
+        return "", "⚠️  Agent 6 needs Agent 5 to have run first"
+    try:
+        result = run_agent_6(api_key, a5)
+        _session["agent_6_output"] = result
+        return result, f"✅ Agent 6 complete — saved to {run_dir}"
+    except Exception as e:
+        return "", f"❌ Agent 6 failed: {e}"
+
 
 
 # ── Pipeline Generator ────────────────────────────────────────────────────────
@@ -55,6 +185,11 @@ def run_pipeline(api_key: str, job_description: str, company_name: str):
         (status_text, out1, out2, out3, out4, out5, out6, download_update)
     matching the 8 Gradio output components defined in build_ui().
     """
+    run_dir = make_run_dir(_ROOT / "outputs", company_name.strip())
+    _session["run_output_dir"] = str(run_dir)   # store for individual buttons too
+    final_path = run_dir / "final_cover_letter.md"
+
+
     # ── Input validation ──────────────────────────────────────────────────
     if not api_key or not api_key.strip():
         yield (
@@ -92,6 +227,7 @@ def run_pipeline(api_key: str, job_description: str, company_name: str):
         "errors":                [],
         "current_agent":         "starting",
         "company_name": company_name.strip(),
+        "run_output_dir": str(run_dir), 
 
     }
 
@@ -133,8 +269,8 @@ def run_pipeline(api_key: str, job_description: str, company_name: str):
                         status = "✅ All 6 agents complete! Your cover letter is ready below."
 
                     download_update = (
-                        gr.update(value=str(FINAL_OUTPUT_PATH), visible=True)
-                        if i == 5 and FINAL_OUTPUT_PATH.exists()
+                        gr.update(value=str(final_path), visible=True)
+                        if i == 5 and final_path.exists()
                         else gr.update(visible=False)
                     )
                     yield (status, *outputs, download_update)
@@ -152,8 +288,8 @@ def run_pipeline(api_key: str, job_description: str, company_name: str):
 
         # ── Final yield with download button ──────────────────────────────
         download_update = (
-            gr.update(value=str(FINAL_OUTPUT_PATH), visible=True)
-            if FINAL_OUTPUT_PATH.exists()
+            gr.update(value=str(final_path), visible=True)
+            if final_path.exists()
             else gr.update(visible=False)
         )
         yield (status, *outputs, download_update)
@@ -190,20 +326,20 @@ def build_ui() -> gr.Blocks:
         # ── Header ────────────────────────────────────────────────────────
         gr.Markdown(
             """
-# 🤖 AI Cover Letter Generator
-### 6-Agent Pipeline · Gemini 2.5 Pro + LangGraph + Google Search Grounding
+                # 🤖 AI Cover Letter Generator
+                ### 6-Agent Pipeline · Gemini 2.5 Pro + LangGraph + Google Search Grounding
 
-**What each agent does:**
-| Agent | Task | Web Search? |
-|-------|------|-------------|
-| 1 | Research core business problem + how company solved it | ✅ Mandatory |
-| 2 | Generate JD-aligned skills section + merge into your CV | ❌ |
-| 3 | Research company vision, culture & values | ✅ Mandatory |
-| 4 | Generate raw cover letter ideas across 7 dimensions | ❌ |
-| 5 | Organise ideas into 4 cover letter paragraphs | ❌ |
-| 6 | Write final cover letter (with self-critique loop) | ❌ |
+                **What each agent does:**
+                | Agent | Task | Web Search? |
+                |-------|------|-------------|
+                | 1 | Research core business problem + how company solved it | ✅ Mandatory |
+                | 2 | Generate JD-aligned skills section + merge into your CV | ❌ |
+                | 3 | Research company vision, culture & values | ✅ Mandatory |
+                | 4 | Generate raw cover letter ideas across 7 dimensions | ❌ |
+                | 5 | Organise ideas into 4 cover letter paragraphs | ❌ |
+                | 6 | Write final cover letter (with self-critique loop) | ❌ |
 
-> 📄 **Before running:** Place your `cv.md` file (without skills/profile summary sections) in the project root directory.
+                > 📄 **Before running:** Place your `cv.md` file (without skills/profile summary sections) in the project root directory.
             """,
             elem_classes=["header-box"],
         )
@@ -239,18 +375,46 @@ def build_ui() -> gr.Blocks:
                 run_btn = gr.Button(
                     "🚀 Generate Cover Letter",
                     variant="primary",
-                    size="lg",
+                    size="l" \
+                    "g",
                 )
+
 
                 gr.Markdown(
                     """
-<div class="warning-box">
-⚠️ <strong>Expected runtime: 15–25 minutes total</strong><br>
-Agents 1 and 3 perform live deep web research using Gemini's native Google Search grounding.
-Each search agent may take 3–5 minutes. Do not close this page during processing.
-</div>
+                        <div class="warning-box">
+                        ⚠️ <strong>Expected runtime: 15–25 minutes total</strong><br>
+                        Agents 1 and 3 perform live deep web research using Gemini's native Google Search grounding.
+                        Each search agent may take 3–5 minutes. Do not close this page during processing.
+                        </div>
                     """
                 )
+
+
+
+
+        gr.Markdown("### ▶ Run Individual Agents")
+        gr.Markdown("*Use these if the pipeline failed or you want to rerun a specific agent. Each agent reads from the previous agent's saved output.*")
+
+        with gr.Row():
+            btn_a1 = gr.Button("① Business Problem",  variant="secondary", size="sm")
+            btn_a2 = gr.Button("② CV Skills",          variant="secondary", size="sm")
+            btn_a3 = gr.Button("③ Company Culture",    variant="secondary", size="sm")
+            btn_a4 = gr.Button("④ Cover Points",       variant="secondary", size="sm")
+            btn_a5 = gr.Button("⑤ Organise",           variant="secondary", size="sm")
+            btn_a6 = gr.Button("⑥ Write Letter",       variant="secondary", size="sm")
+
+        agent_status_box = gr.Textbox(label="Agent Status", interactive=False, lines=2)
+
+
+
+
+
+
+
+
+
+
 
         # ── Status Bar ────────────────────────────────────────────────────
         status_box = gr.Textbox(
@@ -299,7 +463,16 @@ Each search agent may take 3–5 minutes. Do not close this page during processi
             show_progress="hidden",  # We use our own status box
         )
 
+        btn_a1.click(run_single_agent_1, inputs=[api_key_input, jd_input],           outputs=[tab_outputs[0], agent_status_box])
+        btn_a2.click(run_single_agent_2, inputs=[api_key_input, jd_input],           outputs=[tab_outputs[1], agent_status_box])
+        btn_a3.click(run_single_agent_3, inputs=[api_key_input, company_name_input], outputs=[tab_outputs[2], agent_status_box])
+        btn_a4.click(run_single_agent_4, inputs=[api_key_input],                     outputs=[tab_outputs[3], agent_status_box])
+        btn_a5.click(run_single_agent_5, inputs=[api_key_input],                     outputs=[tab_outputs[4], agent_status_box])
+        btn_a6.click(run_single_agent_6, inputs=[api_key_input],                     outputs=[tab_outputs[5], agent_status_box])
+
     return demo
+
+
 
 
 # ── Entry Point ───────────────────────────────────────────────────────────────

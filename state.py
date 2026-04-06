@@ -12,6 +12,7 @@ class CoverLetterState(TypedDict):
     api_key: str                    # Gemini API key provided by user via UI
     # Under ── User Inputs ──, add after job_description:
     company_name: str   # Company name entered directly by user via UI
+    run_output_dir: str 
     job_description: str            # Full job description pasted by user
 
     # ── Agent Outputs (saved as intermediate .md files) ───────────────────
