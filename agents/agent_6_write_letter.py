@@ -28,6 +28,28 @@ from prompts.agent_6 import CRITIQUE_SYSTEM_PROMPT, WRITER_SYSTEM_PROMPT
 from pydantic import BaseModel, field_validator
 from typing import Optional
 
+
+import logging
+logger = logging.getLogger(__name__)
+
+def _log_api_call(call_name: str, system_prompt: str, user_message: str) -> None:
+    """Log token estimates and full content for every Gemini call in Agent 6."""
+    sys_chars  = len(system_prompt)
+    usr_chars  = len(user_message)
+    total_chars = sys_chars + usr_chars
+    logger.warning(
+        f"\n{'='*60}\n"
+        f"[Agent 6 — API CALL: {call_name}]\n"
+        f"  System prompt : {sys_chars:,} chars (~{sys_chars//4:,} tokens)\n"
+        f"  User message  : {usr_chars:,} chars (~{usr_chars//4:,} tokens)\n"
+        f"  TOTAL INPUT   : {total_chars:,} chars (~{total_chars//4:,} tokens)\n"
+        f"{'─'*60}\n"
+        f"[SYSTEM PROMPT]\n{system_prompt}\n"
+        f"{'─'*60}\n"
+        f"[USER MESSAGE]\n{user_message}\n"
+        f"{'='*60}"
+    )
+
 class CritiqueResult(BaseModel):
     has_violations:       bool
     consecutive_i_starts: bool = False   # default False — older responses won't have it
@@ -50,6 +72,8 @@ class CritiqueResult(BaseModel):
 
 def _write_letter(client: genai.Client, organised_sections_md: str) -> str:
     """First pass: generate the cover letter from organised sections."""
+    _log_api_call("WRITE (pass 1)", WRITER_SYSTEM_PROMPT, organised_sections_md)
+
     response = generate_with_retry(
         client,
         model="gemini-3-flash-preview",
@@ -59,12 +83,17 @@ def _write_letter(client: genai.Client, organised_sections_md: str) -> str:
             "---ORGANISED COVER LETTER SECTIONS END---\n\n"
             "Write the cover letter now based on the content in these sections.\n"
             "Follow all writing rules and the 5-paragraph structure strictly.\n"
-            "Use only the content provided — do not invent facts not present in the sections."
+            "Use only the content provided — do not invent facts not present in the sections.\n\n"
+            "PRIORITY RULE: If you cannot fit all bullets, follow this priority order:\n"
+            "1. MUST USE — Any bullet naming a specific company, technology, regulation, or metric. \n"
+            "2. MUST USE — Any bullet from company_fit that names a specific company value or cultural principle\n"
+            "3. OPTIONAL — Generic growth or ambition statements if space allows\n"
+            "Never drop a specific proof in favour of a generic claim."
         ),
         config=types.GenerateContentConfig(
             system_instruction=WRITER_SYSTEM_PROMPT,
             temperature=0.7,
-            max_output_tokens=8192,
+            max_output_tokens=16384,
         ),
     )
     # ── Truncation guard ─────────────────────────────────────────────────
@@ -80,6 +109,8 @@ def _write_letter(client: genai.Client, organised_sections_md: str) -> str:
 
 def _critique_letter(client: genai.Client, letter: str) -> dict:
     """Second pass: audit the draft for constraint violations."""
+    _log_api_call("CRITIQUE", CRITIQUE_SYSTEM_PROMPT, letter)
+
     response = generate_with_retry(
         client,
         model="gemini-3-flash-preview",
@@ -93,7 +124,7 @@ def _critique_letter(client: genai.Client, letter: str) -> dict:
             system_instruction=CRITIQUE_SYSTEM_PROMPT,
             response_mime_type="application/json",
             temperature=0.1,
-            max_output_tokens=1024,
+            max_output_tokens=8192,
         ),
     )
      # ── Truncation guard ─────────────────────────────────────────────────
@@ -126,6 +157,12 @@ def _regenerate_with_feedback(
     """Third pass: regenerate fixing the specific violations identified."""
     violations_text = "\n".join(f"  - {v}" for v in violations)
 
+    regen_message_to_log = organised_sections_md + draft + violations_text
+
+    _log_api_call("REGENERATE (pass 2)", WRITER_SYSTEM_PROMPT, regen_message_to_log)
+
+
+
     response = generate_with_retry(
         client,
         model="gemini-3-flash-preview",
@@ -145,7 +182,7 @@ def _regenerate_with_feedback(
         config=types.GenerateContentConfig(
             system_instruction=WRITER_SYSTEM_PROMPT,
             temperature=0.6,
-            max_output_tokens=8192,
+            max_output_tokens=16384,
         ),
     )
     return response.text

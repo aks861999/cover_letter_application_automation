@@ -61,7 +61,7 @@ def run(
         "---CANDIDATE CV WITH SKILLS START---\n"
         f"{skills_cv_md}\n"
         "---CANDIDATE CV WITH SKILLS END---\n\n"
-        "Now analyse all three documents and generate raw bullet-point material for all 7 dimensions.\n"
+        "Now analyse all three documents and generate raw bullet-point material for all 5 dimensions.\n"
         "Remember: Do NOT write the cover letter. Only raw ideas and specific, concrete points.\n"
         "Reference actual content from the documents above — no generic advice."
     )

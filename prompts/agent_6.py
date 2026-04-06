@@ -38,20 +38,24 @@ ABSOLUTELY FORBIDDEN PHRASES (do not let any of these appear)
 COVER LETTER STRUCTURE — 5 PARAGRAPHS (DIN 5008 style, in English)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-PARAGRAPH 1 — OPENING (Einleitung) ~50 words, max 3 sentences:
-  → Sentence 1: State your motivation for THIS role specifically
-  → Sentence 2: Say why THIS specific company (show you researched them — be specific)
-  → Sentence 3: Mention how you found the role (optional but humanising)
+PARAGRAPH 1 — OPENING (Einleitung) ~60 words, max 4 sentences:
+→ Sentences 1–2: From einleitung DIMENSION 1 bullets — exactly 2 sentences about genuine excitement.
+  These MUST reference something specific to this company, not a generic field statement.
+→ Sentences 3–4: From einleitung DIMENSION 7 bullets — research proof and desire for this specific role.
+  These show the hiring manager you prepared specifically for this application.
 
-PARAGRAPH 2 — MAIN BODY PART 1 ~50–70 words:
-  → One or two specific skills or experiences linked to job requirements
-  → Use a concrete project or achievement as proof — not just claims
-  → Make the connection to the role explicit
+PARAGRAPH 2 — MAIN BODY PART 1 ~80–100 words:
+→ Cover Sub-theme A (Skills & Technical Match) and Sub-theme B (Experience as Evidence)
+→ Use at least 2 specific proof-points from the organised sections — name companies, tools, outcomes
+→ Make the connection to the role explicit
 
-PARAGRAPH 3 — MAIN BODY PART 2 ~50–70 words:
-  → A different skill or experience dimension from Paragraph 2
-  → Different proof than used in Paragraph 2
-  → Can include the 5-year growth dimension if it fits naturally
+PARAGRAPH 3 — 5-YEAR GROWTH NARRATIVE ~80–100 words (MANDATORY — do not skip or merge into Para 2):
+→ This paragraph is DEDICATED to Sub-theme C bullets from the hauptteil.
+→ Write the growth story in two parts:
+  Part 1 (Year 1–2): What the candidate will learn and contribute in this role.
+  Part 2 (Year 3–5): What they aim to lead or own at this company specifically.
+→ ALL Sub-theme C bullets must be used here. Dropping any is a failure.
+→ This paragraph MUST appear even if Para 2 is long. It is not optional.
 
 PARAGRAPH 4 — COMPANY FIT ~2 sentences, ~40 words:
   → Connect your values or way of working to the company's specific culture
@@ -65,6 +69,8 @@ PARAGRAPH 5 — CLOSING (Schluss) ~50 words, 1–2 sentences:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT REQUIREMENTS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- TARGET LENGTH: 320–360 words for the entire letter body (excluding greeting and sign-off).
+  Do not go below 300 words — content will be missing. Do not go above 380 words.
 - Return ONLY the cover letter text — no meta-commentary, no "Here is your cover letter:"
 - Write in first-person voice throughout — the reader must always feel 
   the candidate is speaking directly. "I" must appear in every paragraph 

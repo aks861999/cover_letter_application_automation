@@ -25,14 +25,16 @@ from utils import generate_with_retry, MaxRetriesExceeded
 
 from pydantic import BaseModel, field_validator
 from prompts.agent_5 import SYSTEM_PROMPT
+import logging
+logger = logging.getLogger(__name__)
 
 class OrganisedSections(BaseModel):
     einleitung: list[str]
     hauptteil:  list[str]
-    companyfit: list[str]
+    company_fit: list[str]
     schluss:    list[str]
 
-    @field_validator("einleitung", "hauptteil", "companyfit", "schluss", mode="before")
+    @field_validator("einleitung", "hauptteil", "company_fit", "schluss", mode="before")
     @classmethod
     def coerce_to_list(cls, v):
         # If LLM returns a string instead of a list, wrap it
@@ -74,15 +76,15 @@ def _parse_json_response(raw_text: str) -> dict:
         return validated.model_dump()
     except (json.JSONDecodeError, ValueError) as e:
     # ValueError catches Pydantic ValidationError too
-        return {"einleitung": [], "hauptteil": [rawtext], "companyfit": [], "schluss": []}
+        return {"einleitung": [], "hauptteil": [raw_text], "company_fit": [], "schluss": []}
 
 
 def _sections_to_markdown(data: dict) -> str:
     """Convert the 4-section dict to a structured, human-readable Markdown document."""
     section_meta = {
-        "einleitung": ("## Section 1: Opening (Einleitung)", "~50 words · 3 sentences max · motivation + why this company + how role found"),
-        "hauptteil":  ("## Section 2: Main Body (Hauptteil)", "~150–200 words · 3 sub-paragraphs · skills + experience + concrete proof + growth"),
-        "company_fit": ("## Section 3: Company-Fit Paragraph", "~2 lines · values/working style connected to company's specific culture & goals"),
+        "einleitung": ("## Section 1: Opening (Einleitung)", "~60 words · 4 bullets · 2 from Dim 1 (genuine excitement) + 2 from Dim 7 sub-items a/b/e (research proof)"),
+        "hauptteil":  ("## Section 2: Main Body (Hauptteil)", "~180–220 words · Sub-A: top 2–3 Dim 2 skills with proof · Sub-B: all Dim 7 c/d/f signals · Sub-C: ALL Dim 3 growth bullets mandatory"),
+        "company_fit": ("## Section 3: Company-Fit Paragraph", "~80 words · all Dim 4 culture bullets (mandatory full transfer) + 1 Dim 7 sub-item g team-fit bullet"),
         "schluss":    ("## Section 4: Closing (Schluss)", "~50 words · 1–2 sentences · active-voice interview request + availability"),
     }
 
@@ -112,7 +114,7 @@ def run(api_key: str, unorganised_points_md: str, output_dir: Path) -> str:
 
     Args:
         api_key: Gemini API key.
-        unorganised_points_md: Agent 4 output (raw bullet points across 7 dimensions).
+        unorganised_points_md: Agent 4 output (raw bullet points across 5 dimensions: 1, 2, 3, 4, 5).
 
     Returns:
         Markdown string with content mapped to 4 cover letter sections.
@@ -125,7 +127,8 @@ def run(api_key: str, unorganised_points_md: str, output_dir: Path) -> str:
         "---UNORGANISED CONTENT START---\n"
         f"{unorganised_points_md}\n"
         "---UNORGANISED CONTENT END---\n\n"
-        "Redistribute ALL the bullet points above into the 4 cover letter sections.\n"
+        "Process the bullet points above using the dimension quotas defined in your instructions.\n"
+        "Select from Dimension 2 (top 2–3 only). Transfer Dimensions 3, 4, and 7 in full.\n"
         "Return ONLY the valid JSON object. No other text, no explanation, no fences."
     )
 
@@ -145,6 +148,23 @@ def run(api_key: str, unorganised_points_md: str, output_dir: Path) -> str:
     data = _parse_json_response(raw_text)
     result = _sections_to_markdown(data)
     out_file.write_text(result, encoding="utf-8")
+
+
+    # ── DEBUG: log what Agent 6 will receive ─────────────────────────────
+    char_count  = len(result)
+    token_estimate = char_count // 4          # rough: 1 token ≈ 4 chars
+    line_count  = result.count("\n")
+    logger.warning(
+        f"\n{'='*60}\n"
+        f"[Agent 5 → Agent 6 HANDOFF]\n"
+        f"  Characters : {char_count:,}\n"
+        f"  Est. tokens: ~{token_estimate:,}\n"
+        f"  Lines      : {line_count}\n"
+        f"{'='*60}\n"
+        f"{result}\n"
+        f"{'='*60}"
+    )
+    
     return result
 
 

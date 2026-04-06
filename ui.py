@@ -15,16 +15,15 @@ Output tabs (one per agent, updated via streaming as each completes):
 
 Download button becomes visible when Agent 6 finishes.
 """
-from utils import MaxRetriesExceeded   # add at top of ui.py
+from utils import MaxRetriesExceeded
 
 from pathlib import Path
 import gradio as gr
 from graph import graph
 from state import CoverLetterState
-from utils import make_run_dir   # add to imports at top
+from utils import make_run_dir
 
-_ROOT = Path(__file__).parent    
-
+_ROOT = Path(__file__).parent
 
 from agents.agent_1_business_problem import run as run_agent_1
 from agents.agent_2_cv_skills        import run as run_agent_2
@@ -35,11 +34,13 @@ from agents.agent_6_write_letter     import run as run_agent_6
 
 
 
-# In-memory session state — persists for duration of Gradio session
+
+# ── In-memory session state ───────────────────────────────────────────────────
 _session = {
     "api_key": "",
     "job_description": "",
     "company_name": "",
+    "run_output_dir": None,
     "agent_1_output": None,
     "agent_2_output": None,
     "agent_3_output": None,
@@ -47,11 +48,6 @@ _session = {
     "agent_5_output": None,
     "agent_6_output": None,
 }
-
-
-
-
-
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -64,7 +60,7 @@ AGENT_LABELS = [
     "✉️  Agent 6: Final Cover Letter",
 ]
 
-# Keys in state that each agent populates (in pipeline order)
+# Keys in LangGraph state that each agent populates (in pipeline order)
 AGENT_STATE_KEYS = [
     "business_problem_md",
     "skills_cv_md",
@@ -75,16 +71,55 @@ AGENT_STATE_KEYS = [
 ]
 
 
+import logging
+from datetime import datetime
 
+def _setup_run_logging(run_dir: Path) -> None:
+    """
+    Attach a FileHandler to the root logger pointing at the current run folder.
+    Removes any previous FileHandler first to avoid duplicate log entries
+    if multiple runs happen in the same session.
+    """
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.WARNING)
+
+    # Remove any existing FileHandlers from previous runs
+    for handler in root_logger.handlers[:]:
+        if isinstance(handler, logging.FileHandler):
+            handler.close()
+            root_logger.removeHandler(handler)
+
+    # Create timestamped log file inside this run's output folder
+    timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+    log_file = run_dir / f"pipeline_debug_{timestamp}.log"
+
+    file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    file_handler.setLevel(logging.WARNING)
+    file_handler.setFormatter(logging.Formatter(
+        fmt="%(asctime)s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    root_logger.addHandler(file_handler)
+
+# Matching keys in _session dict — must stay in sync with AGENT_STATE_KEYS order
+_SESSION_KEYS = [
+    "agent_1_output",
+    "agent_2_output",
+    "agent_3_output",
+    "agent_4_output",
+    "agent_5_output",
+    "agent_6_output",
+]
+
+
+# ── Individual Agent Runners ──────────────────────────────────────────────────
 
 def run_single_agent_1(api_key, job_description):
     run_dir = _session.get("run_output_dir")
     if not run_dir:
-        # No pipeline run yet — create a fresh dir with a placeholder name
         run_dir = str(make_run_dir(_ROOT / "outputs", "manual_run"))
         _session["run_output_dir"] = run_dir
-    
-
+        _setup_run_logging(Path(run_dir))
     try:
         result = run_agent_1(api_key, job_description, Path(run_dir))
         _session["agent_1_output"] = result
@@ -92,13 +127,13 @@ def run_single_agent_1(api_key, job_description):
     except Exception as e:
         return "", f"❌ Agent 1 failed: {e}"
 
+
 def run_single_agent_2(api_key, job_description):
     run_dir = _session.get("run_output_dir")
     if not run_dir:
-        # No pipeline run yet — create a fresh dir with a placeholder name
         run_dir = str(make_run_dir(_ROOT / "outputs", "manual_run"))
         _session["run_output_dir"] = run_dir
-
+        _setup_run_logging(Path(run_dir))
     try:
         result = run_agent_2(api_key, job_description, Path(run_dir))
         _session["agent_2_output"] = result
@@ -106,13 +141,13 @@ def run_single_agent_2(api_key, job_description):
     except Exception as e:
         return "", f"❌ Agent 2 failed: {e}"
 
+
 def run_single_agent_3(api_key, company_name):
     run_dir = _session.get("run_output_dir")
     if not run_dir:
-        # No pipeline run yet — create a fresh dir with a placeholder name
         run_dir = str(make_run_dir(_ROOT / "outputs", "manual_run"))
         _session["run_output_dir"] = run_dir
-
+        _setup_run_logging(Path(run_dir))
     try:
         result = run_agent_3(api_key, company_name, Path(run_dir))
         _session["agent_3_output"] = result
@@ -120,12 +155,13 @@ def run_single_agent_3(api_key, company_name):
     except Exception as e:
         return "", f"❌ Agent 3 failed: {e}"
 
+
 def run_single_agent_4(api_key):
     run_dir = _session.get("run_output_dir")
     if not run_dir:
-        # No pipeline run yet — create a fresh dir with a placeholder name
         run_dir = str(make_run_dir(_ROOT / "outputs", "manual_run"))
         _session["run_output_dir"] = run_dir
+        _setup_run_logging(Path(run_dir))
 
     a1 = _session["agent_1_output"]
     a2 = _session["agent_2_output"]
@@ -133,46 +169,47 @@ def run_single_agent_4(api_key):
     if not all([a1, a2, a3]):
         return "", "⚠️  Agent 4 needs Agents 1, 2, 3 to have run first"
     try:
-        result = run_agent_4(api_key, a1, a3, a2)
+        result = run_agent_4(api_key, a1, a3, a2, Path(run_dir))
         _session["agent_4_output"] = result
         return result, f"✅ Agent 4 complete — saved to {run_dir}"
     except Exception as e:
         return "", f"❌ Agent 4 failed: {e}"
 
+
 def run_single_agent_5(api_key):
     run_dir = _session.get("run_output_dir")
     if not run_dir:
-        # No pipeline run yet — create a fresh dir with a placeholder name
         run_dir = str(make_run_dir(_ROOT / "outputs", "manual_run"))
         _session["run_output_dir"] = run_dir
+        _setup_run_logging(Path(run_dir))
 
     a4 = _session["agent_4_output"]
     if not a4:
         return "", "⚠️  Agent 5 needs Agent 4 to have run first"
     try:
-        result = run_agent_5(api_key, a4)
+        result = run_agent_5(api_key, a4, Path(run_dir))
         _session["agent_5_output"] = result
         return result, f"✅ Agent 5 complete — saved to {run_dir}"
     except Exception as e:
         return "", f"❌ Agent 5 failed: {e}"
 
+
 def run_single_agent_6(api_key):
     run_dir = _session.get("run_output_dir")
     if not run_dir:
-        # No pipeline run yet — create a fresh dir with a placeholder name
         run_dir = str(make_run_dir(_ROOT / "outputs", "manual_run"))
         _session["run_output_dir"] = run_dir
+        _setup_run_logging(Path(run_dir))
 
     a5 = _session["agent_5_output"]
     if not a5:
         return "", "⚠️  Agent 6 needs Agent 5 to have run first"
     try:
-        result = run_agent_6(api_key, a5)
+        result = run_agent_6(api_key, a5, Path(run_dir))
         _session["agent_6_output"] = result
         return result, f"✅ Agent 6 complete — saved to {run_dir}"
     except Exception as e:
         return "", f"❌ Agent 6 failed: {e}"
-
 
 
 # ── Pipeline Generator ────────────────────────────────────────────────────────
@@ -186,32 +223,24 @@ def run_pipeline(api_key: str, job_description: str, company_name: str):
     matching the 8 Gradio output components defined in build_ui().
     """
     run_dir = make_run_dir(_ROOT / "outputs", company_name.strip())
-    _session["run_output_dir"] = str(run_dir)   # store for individual buttons too
+    _session["run_output_dir"] = str(run_dir)
+    _setup_run_logging(run_dir)  
     final_path = run_dir / "final_cover_letter.md"
-
 
     # ── Input validation ──────────────────────────────────────────────────
     if not api_key or not api_key.strip():
-        yield (
-            "⚠️ Please enter your Gemini API key in the field above.",
-            "", "", "", "", "", "",
-            gr.update(visible=False),
-        )
+        yield ("⚠️ Please enter your Gemini API key in the field above.",
+               "", "", "", "", "", "", gr.update(visible=False))
         return
 
     if not job_description or not job_description.strip():
-        yield (
-            "⚠️ Please paste the Job Description before clicking Generate.",
-            "", "", "", "", "", "",
-            gr.update(visible=False),
-        )
+        yield ("⚠️ Please paste the Job Description before clicking Generate.",
+               "", "", "", "", "", "", gr.update(visible=False))
         return
+
     if not company_name or not company_name.strip():
-        yield (
-            "⚠️ Please enter the Company Name before clicking Generate.",
-            "", "", "", "", "", "",
-            gr.update(visible=False),
-        )
+        yield ("⚠️ Please enter the Company Name before clicking Generate.",
+               "", "", "", "", "", "", gr.update(visible=False))
         return
 
     # ── Build initial state ───────────────────────────────────────────────
@@ -226,9 +255,8 @@ def run_pipeline(api_key: str, job_description: str, company_name: str):
         "final_cover_letter_md": "",
         "errors":                [],
         "current_agent":         "starting",
-        "company_name": company_name.strip(),
-        "run_output_dir": str(run_dir), 
-
+        "company_name":          company_name.strip(),
+        "run_output_dir":        str(run_dir),
     }
 
     # ── Yield initial status before pipeline starts ───────────────────────
@@ -243,17 +271,18 @@ def run_pipeline(api_key: str, job_description: str, company_name: str):
     captured = [False] * 6
 
     try:
-        # LangGraph stream: yields the FULL state after each node completes
         for state_snapshot in graph.stream(initial_state, stream_mode="values"):
             updated = False
 
             for i, key in enumerate(AGENT_STATE_KEYS):
                 value = state_snapshot.get(key, "")
-                # Only update the UI when this field transitions from empty → filled
                 if value and not captured[i]:
                     outputs[i] = value
                     captured[i] = True
                     updated = True
+
+                    # ── Back-fill session so individual buttons work immediately ──
+                    _session[_SESSION_KEYS[i]] = value
 
                     # Build status message
                     next_idx = i + 1
@@ -263,7 +292,7 @@ def run_pipeline(api_key: str, job_description: str, company_name: str):
                             f"✅ {AGENT_LABELS[i]} — Complete\n"
                             f"🔄 Now running: {next_label}…"
                         )
-                        if next_idx in (2,):  # Agent 3 also uses web search
+                        if next_idx == 2:
                             status += "\n⏳ Web search agent — may take 3–5 minutes."
                     else:
                         status = "✅ All 6 agents complete! Your cover letter is ready below."
@@ -274,9 +303,8 @@ def run_pipeline(api_key: str, job_description: str, company_name: str):
                         else gr.update(visible=False)
                     )
                     yield (status, *outputs, download_update)
-                    break  # Yield once per agent completion event
+                    break
 
-            # Catch the very last state snapshot (all 6 complete)
             if all(captured) and not updated:
                 break
 
@@ -294,13 +322,14 @@ def run_pipeline(api_key: str, job_description: str, company_name: str):
         )
         yield (status, *outputs, download_update)
 
-        pass
-
-    
     except Exception as exc:
+        # ── FIX: preserve already-rendered outputs — do NOT wipe them ────
+        completed = sum(captured)
         yield (
-            f"🛑 Pipeline stopped: {exc}",
-            *[""] * 6,
+            f"🛑 Pipeline stopped: {exc}\n\n"
+            f"✅ Agents 1–{completed} completed successfully — outputs saved to disk.\n"
+            f"▶ Use the individual agent buttons above to re-run only the failed agent.",
+            *outputs,                  # keep what was already rendered
             gr.update(visible=False),
         )
         return
@@ -354,7 +383,6 @@ def build_ui() -> gr.Blocks:
                     lines=1,
                     info="Get a key at https://aistudio.google.com/apikey — requires Gemini 2.5 Pro access.",
                 )
-
                 jd_input = gr.Textbox(
                     label="📋 Job Description",
                     placeholder=(
@@ -371,15 +399,11 @@ def build_ui() -> gr.Blocks:
                     lines=1,
                     info="Exact company name — used by Agent 3 for culture research.",
                 )
-
                 run_btn = gr.Button(
                     "🚀 Generate Cover Letter",
                     variant="primary",
-                    size="l" \
-                    "g",
+                    size="lg",
                 )
-
-
                 gr.Markdown(
                     """
                         <div class="warning-box">
@@ -390,11 +414,8 @@ def build_ui() -> gr.Blocks:
                     """
                 )
 
-
-
-
         gr.Markdown("### ▶ Run Individual Agents")
-        gr.Markdown("*Use these if the pipeline failed or you want to rerun a specific agent. Each agent reads from the previous agent's saved output.*")
+        gr.Markdown("*Use these if the pipeline failed or you want to rerun a specific agent. Outputs from previous agents are read from the in-memory session (populated automatically as the pipeline runs).*")
 
         with gr.Row():
             btn_a1 = gr.Button("① Business Problem",  variant="secondary", size="sm")
@@ -405,16 +426,6 @@ def build_ui() -> gr.Blocks:
             btn_a6 = gr.Button("⑥ Write Letter",       variant="secondary", size="sm")
 
         agent_status_box = gr.Textbox(label="Agent Status", interactive=False, lines=2)
-
-
-
-
-
-
-
-
-
-
 
         # ── Status Bar ────────────────────────────────────────────────────
         status_box = gr.Textbox(
@@ -460,7 +471,7 @@ def build_ui() -> gr.Blocks:
             fn=run_pipeline,
             inputs=[api_key_input, jd_input, company_name_input],
             outputs=[status_box, *tab_outputs, download_file],
-            show_progress="hidden",  # We use our own status box
+            show_progress="hidden",
         )
 
         btn_a1.click(run_single_agent_1, inputs=[api_key_input, jd_input],           outputs=[tab_outputs[0], agent_status_box])
@@ -471,8 +482,6 @@ def build_ui() -> gr.Blocks:
         btn_a6.click(run_single_agent_6, inputs=[api_key_input],                     outputs=[tab_outputs[5], agent_status_box])
 
     return demo
-
-
 
 
 # ── Entry Point ───────────────────────────────────────────────────────────────
