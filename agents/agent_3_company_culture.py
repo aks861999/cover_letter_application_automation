@@ -4,13 +4,14 @@ Agent 3 — Company Vision & Culture Research
 Mandatory web search (GoogleSearch grounding via Gemini API).
 
 Task  : Research the company's overall vision, culture, and values.
-        Extracts the company name from Agent 1's output first.
-Input : business_problem_md (from state, Agent 1's output)
+        Company name is provided directly by the user via UI.
+Input : company_name (from state, entered by user)
 Output: company_vision_and_culture.md
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 import sys
 from pathlib import Path
+from utils import generate_with_retry, MaxRetriesExceeded
 
 _ROOT = Path(__file__).parent.parent
 if str(_ROOT) not in sys.path:
@@ -21,11 +22,6 @@ from google.genai import types
 from state import CoverLetterState
 
 OUTPUT_FILE = _ROOT / "outputs" / "company_vision_and_culture.md"
-
-# ── System Prompt: Company Name Extractor ─────────────────────────────────────
-EXTRACT_NAME_PROMPT = """You are a data extractor.
-From the provided document, extract ONLY the company name.
-Return ONLY the company name as plain text — no other words, no punctuation beyond what is part of the name itself, no explanation."""
 
 # ── System Prompt: Culture Researcher ────────────────────────────────────────
 CULTURE_SYSTEM_PROMPT = """You are a cultural intelligence researcher specialising in organisational culture, leadership philosophy, and employer branding.
@@ -102,31 +98,9 @@ OUTPUT FORMAT (strict Markdown — follow exactly)
 """
 
 
-def _extract_company_name(client: genai.Client, business_problem_md: str) -> str:
-    """
-    Use a small, fast LLM call to extract the company name from Agent 1's output.
-    Falls back to 'the company' if extraction fails.
-    """
-    try:
-        # Use the first 3000 chars — the company name appears near the top
-        snippet = business_problem_md[:3000]
-        response = client.models.generate_content(
-            model="gemini-3-flash",
-            contents=f"Extract the company name from this document:\n\n{snippet}",
-            config=types.GenerateContentConfig(
-                system_instruction=EXTRACT_NAME_PROMPT,
-                temperature=0.1,
-                max_output_tokens=50,
-            ),
-        )
-        name = response.text.strip()
-        # Sanity check — if it's too long it's probably not a company name
-        return name if len(name) < 100 else "the company"
-    except Exception:
-        return "the company"
 
 
-def run(api_key: str, business_problem_md: str) -> str:
+def run(api_key: str, company_name: str) -> str:
     """
     Execute Agent 3: research company vision and culture with mandatory web search.
 
@@ -140,7 +114,6 @@ def run(api_key: str, business_problem_md: str) -> str:
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     client = genai.Client(api_key=api_key)
 
-    company_name = _extract_company_name(client, business_problem_md)
 
     user_message = (
         f"Research the vision, culture, and values of: **{company_name}**\n\n"
@@ -155,7 +128,8 @@ def run(api_key: str, business_problem_md: str) -> str:
         "5. Write your output in the required format"
     )
 
-    response = client.models.generate_content(
+    response = generate_with_retry(
+        client,
         model="gemini-2.5-flash",
         contents=user_message,
         config=types.GenerateContentConfig(
@@ -174,15 +148,12 @@ def run(api_key: str, business_problem_md: str) -> str:
 # ── LangGraph Node Wrapper ────────────────────────────────────────────────────
 def node(state: CoverLetterState) -> dict:
     try:
-        result = run(state["api_key"], state["business_problem_md"])
+        result = run(state["api_key"], state["company_name"])
         return {
             "culture_md": result,
             "current_agent": "agent_3_complete",
         }
-    except Exception as exc:
-        error_msg = f"Agent 3 (Company Culture Research) failed: {exc}"
-        return {
-            "culture_md": f"[AGENT 3 ERROR]\n\n{error_msg}",
-            "errors": [error_msg],
-            "current_agent": "agent_3_error",
-        }
+    except Exception as exc:             # ← catches everything including MaxRetriesExceeded
+        raise RuntimeError(
+            f"Agent X failed — pipeline stopped: {exc}"
+        ) from exc

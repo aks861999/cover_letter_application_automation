@@ -11,6 +11,7 @@ Output: skills_added_cv.md
 """
 import sys
 from pathlib import Path
+from utils import generate_with_retry, MaxRetriesExceeded
 
 _ROOT = Path(__file__).parent.parent
 if str(_ROOT) not in sys.path:
@@ -118,8 +119,9 @@ def run(api_key: str, job_description: str) -> str:
         "Make sure every skill is specific and relevant to this JD. No generic placeholders."
     )
 
-    skills_response = client.models.generate_content(
-        model="gemini-3-flash",
+    skills_response = generate_with_retry(
+        client,
+        model="gemini-3-flash-preview",
         contents=skills_message,
         config=types.GenerateContentConfig(
             system_instruction=SKILLS_SYSTEM_PROMPT,
@@ -156,10 +158,7 @@ def node(state: CoverLetterState) -> dict:
             "skills_cv_md": result,
             "current_agent": "agent_2_complete",
         }
-    except Exception as exc:
-        error_msg = f"Agent 2 (CV Skills Writer) failed: {exc}"
-        return {
-            "skills_cv_md": f"[AGENT 2 ERROR]\n\n{error_msg}",
-            "errors": [error_msg],
-            "current_agent": "agent_2_error",
-        }
+    except Exception as exc:             # ← catches everything including MaxRetriesExceeded
+        raise RuntimeError(
+            f"Agent X failed — pipeline stopped: {exc}"
+        ) from exc

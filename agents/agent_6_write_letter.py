@@ -13,6 +13,7 @@ Output: final_cover_letter.md
 import json
 import sys
 from pathlib import Path
+from utils import generate_with_retry, MaxRetriesExceeded
 
 _ROOT = Path(__file__).parent.parent
 if str(_ROOT) not in sys.path:
@@ -127,29 +128,39 @@ Or if no violations:
 
 def _write_letter(client: genai.Client, organised_sections_md: str) -> str:
     """First pass: generate the cover letter from organised sections."""
-    response = client.models.generate_content(
-        model="gemini-3-flash",
+    response = generate_with_retry(
+        client,
+        model="gemini-3-flash-preview",
         contents=(
             "---ORGANISED COVER LETTER SECTIONS START---\n"
             f"{organised_sections_md}\n"
             "---ORGANISED COVER LETTER SECTIONS END---\n\n"
             "Write the cover letter now based on the content in these sections.\n"
-            "Follow all writing rules and the 4-paragraph structure strictly.\n"
+            "Follow all writing rules and the 5-paragraph structure strictly.\n"
             "Use only the content provided — do not invent facts not present in the sections."
         ),
         config=types.GenerateContentConfig(
             system_instruction=WRITER_SYSTEM_PROMPT,
             temperature=0.7,
-            max_output_tokens=2048,
+            max_output_tokens=8192,
         ),
     )
+    # ── Truncation guard ─────────────────────────────────────────────────
+    candidate = response.candidates[0]
+    if candidate.finish_reason.name == "MAX_TOKENS":
+        raise RuntimeError(
+            "Cover letter was truncated at token limit — "
+            "increase max_output_tokens or shorten the input sections."
+        )
+    # ─────────────────────────────────────────────────────────────────────
     return response.text
 
 
 def _critique_letter(client: genai.Client, letter: str) -> dict:
     """Second pass: audit the draft for constraint violations."""
-    response = client.models.generate_content(
-        model="gemini-3-flash",
+    response = generate_with_retry(
+        client,
+        model="gemini-3-flash-preview",
         contents=(
             "---COVER LETTER TO AUDIT START---\n"
             f"{letter}\n"
@@ -163,6 +174,14 @@ def _critique_letter(client: genai.Client, letter: str) -> dict:
             max_output_tokens=1024,
         ),
     )
+     # ── Truncation guard ─────────────────────────────────────────────────
+    candidate = response.candidates[0]
+    if candidate.finish_reason.name == "MAX_TOKENS":
+        raise RuntimeError(
+            "Cover letter was truncated at token limit — "
+            "increase max_output_tokens or shorten the input sections."
+        )
+    # ─────────────────────────────────────────────────────────────────────
     try:
         raw = response.text.strip()
         if raw.startswith("```"):
@@ -170,7 +189,7 @@ def _critique_letter(client: genai.Client, letter: str) -> dict:
         return json.loads(raw)
     except (json.JSONDecodeError, Exception):
         # If critique itself fails, assume no violations and proceed
-        return {"has_violations": False, "violations": [], "approved": True}
+        return {"has_violations": False, "violations": [], "approved": None}
 
 
 def _regenerate_with_feedback(
@@ -182,8 +201,9 @@ def _regenerate_with_feedback(
     """Third pass: regenerate fixing the specific violations identified."""
     violations_text = "\n".join(f"  - {v}" for v in violations)
 
-    response = client.models.generate_content(
-        model="gemini-3-flash",
+    response = generate_with_retry(
+        client,
+        model="gemini-3-flash-preview",
         contents=(
             "---ORGANISED COVER LETTER SECTIONS START---\n"
             f"{organised_sections_md}\n"
@@ -200,7 +220,7 @@ def _regenerate_with_feedback(
         config=types.GenerateContentConfig(
             system_instruction=WRITER_SYSTEM_PROMPT,
             temperature=0.6,
-            max_output_tokens=2048,
+            max_output_tokens=8192,
         ),
     )
     return response.text
@@ -225,6 +245,8 @@ def run(api_key: str, organised_sections_md: str) -> str:
 
     # Pass 2 — Self-critique
     critique = _critique_letter(client, letter)
+    if critique.get("approved") is None:
+        print("⚠️  Agent 6: critique call failed — skipping regeneration, using first draft.")
 
     # Pass 3 — Regenerate if violations found (conditional LangGraph edge pattern)
     if critique.get("has_violations") and critique.get("violations"):
@@ -247,10 +269,7 @@ def node(state: CoverLetterState) -> dict:
             "final_cover_letter_md": result,
             "current_agent": "agent_6_complete",
         }
-    except Exception as exc:
-        error_msg = f"Agent 6 (Cover Letter Writer) failed: {exc}"
-        return {
-            "final_cover_letter_md": f"[AGENT 6 ERROR]\n\n{error_msg}",
-            "errors": [error_msg],
-            "current_agent": "agent_6_error",
-        }
+    except Exception as exc:             # ← catches everything including MaxRetriesExceeded
+        raise RuntimeError(
+            f"Agent X failed — pipeline stopped: {exc}"
+        ) from exc

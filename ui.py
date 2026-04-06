@@ -15,6 +15,8 @@ Output tabs (one per agent, updated via streaming as each completes):
 
 Download button becomes visible when Agent 6 finishes.
 """
+from utils import MaxRetriesExceeded   # add at top of ui.py
+
 from pathlib import Path
 import gradio as gr
 from graph import graph
@@ -44,7 +46,7 @@ FINAL_OUTPUT_PATH = Path("outputs/final_cover_letter.md")
 
 
 # ── Pipeline Generator ────────────────────────────────────────────────────────
-def run_pipeline(api_key: str, job_description: str):
+def run_pipeline(api_key: str, job_description: str, company_name: str):
     """
     Generator function that runs the full 6-agent LangGraph pipeline
     and yields UI updates after each agent completes.
@@ -69,6 +71,13 @@ def run_pipeline(api_key: str, job_description: str):
             gr.update(visible=False),
         )
         return
+    if not company_name or not company_name.strip():
+        yield (
+            "⚠️ Please enter the Company Name before clicking Generate.",
+            "", "", "", "", "", "",
+            gr.update(visible=False),
+        )
+        return
 
     # ── Build initial state ───────────────────────────────────────────────
     initial_state: CoverLetterState = {
@@ -82,6 +91,8 @@ def run_pipeline(api_key: str, job_description: str):
         "final_cover_letter_md": "",
         "errors":                [],
         "current_agent":         "starting",
+        "company_name": company_name.strip(),
+
     }
 
     # ── Yield initial status before pipeline starts ───────────────────────
@@ -147,17 +158,16 @@ def run_pipeline(api_key: str, job_description: str):
         )
         yield (status, *outputs, download_update)
 
+        pass
+
+    
     except Exception as exc:
-        status = (
-            f"❌ Pipeline error: {exc}\n\n"
-            "Possible causes:\n"
-            "  • Invalid or expired Gemini API key\n"
-            "  • Gemini API quota exceeded\n"
-            "  • Network connectivity issue\n"
-            "Check the terminal for the full traceback."
+        yield (
+            f"🛑 Pipeline stopped: {exc}",
+            *[""] * 6,
+            gr.update(visible=False),
         )
-        yield (status, *outputs, gr.update(visible=False))
-        raise  # Re-raise so the terminal shows the full traceback
+        return
 
 
 # ── UI Builder ────────────────────────────────────────────────────────────────
@@ -219,6 +229,12 @@ def build_ui() -> gr.Blocks:
                     lines=22,
                     info="The more complete the JD, the better the research and cover letter.",
                 )
+                company_name_input = gr.Textbox(
+                    label="🏢 Company Name",
+                    placeholder="e.g. Siemens, Allianz, Fraunhofer, BMW...",
+                    lines=1,
+                    info="Exact company name — used by Agent 3 for culture research.",
+                )
 
                 run_btn = gr.Button(
                     "🚀 Generate Cover Letter",
@@ -278,7 +294,7 @@ Each search agent may take 3–5 minutes. Do not close this page during processi
         # ── Wire Run Button to Generator ──────────────────────────────────
         run_btn.click(
             fn=run_pipeline,
-            inputs=[api_key_input, jd_input],
+            inputs=[api_key_input, jd_input, company_name_input],
             outputs=[status_box, *tab_outputs, download_file],
             show_progress="hidden",  # We use our own status box
         )

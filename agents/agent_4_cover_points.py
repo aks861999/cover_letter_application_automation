@@ -13,6 +13,7 @@ Output: unorganised_cover_letter_content.md
 """
 import sys
 from pathlib import Path
+from utils import generate_with_retry, MaxRetriesExceeded
 
 _ROOT = Path(__file__).parent.parent
 if str(_ROOT) not in sys.path:
@@ -106,7 +107,7 @@ How do the candidate's personal or professional values and working style align w
 Requirements:
 - Reference SPECIFIC cultural signals from the culture document (not generic "I value teamwork")
 - Connect to real evidence from the CV (how they've worked, what they've built)
-- Show the candidate actually understands this company's culture, not just any tech company
+- Show the candidate actually understands this company's culture, not just any company in this industry
 - 3–4 bullet points
 
 ## DIMENSION 5 — HOBBY / PERSONAL INTEREST CONNECTION
@@ -191,8 +192,9 @@ def run(
         "Reference actual content from the documents above — no generic advice."
     )
 
-    response = client.models.generate_content(
-        model="gemini-3-flash",
+    response = generate_with_retry(
+        client,
+        model="gemini-3-flash-preview",
         contents=user_message,
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
@@ -219,10 +221,7 @@ def node(state: CoverLetterState) -> dict:
             "unorganised_points_md": result,
             "current_agent": "agent_4_complete",
         }
-    except Exception as exc:
-        error_msg = f"Agent 4 (Cover Letter Points) failed: {exc}"
-        return {
-            "unorganised_points_md": f"[AGENT 4 ERROR]\n\n{error_msg}",
-            "errors": [error_msg],
-            "current_agent": "agent_4_error",
-        }
+    except Exception as exc:             # ← catches everything including MaxRetriesExceeded
+        raise RuntimeError(
+            f"Agent X failed — pipeline stopped: {exc}"
+        ) from exc

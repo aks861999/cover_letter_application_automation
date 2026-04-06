@@ -1,10 +1,10 @@
 # AI Cover Letter Generator — 6-Agent Pipeline
 
 A production-grade multi-agent cover letter generation system built with:
-- **LangGraph 0.3.x** — Sequential StateGraph orchestration
-- **Gemini 2.5 Pro** (`google-genai` ≥ 1.10.0 unified SDK) — LLM backbone
+- **LangGraph 1.1.x** — Sequential StateGraph orchestration
+- **Gemini 2.5 and gemini-3-flash-preview** (`google-genai` ≥ 1.10.0 unified SDK) — LLM backbone
 - **Google Search Grounding** — Native Gemini web search (no Tavily needed)
-- **Gradio 5.x** — Streaming web UI
+- **Gradio 6.x** — Streaming web UI
 
 ---
 

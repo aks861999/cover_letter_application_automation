@@ -11,6 +11,7 @@ Output: The_Core_Business_Problem_and_how_it_was_solved.md
 """
 import sys
 from pathlib import Path
+from utils import generate_with_retry, MaxRetriesExceeded
 
 # ── Ensure project root is on sys.path so `state` can be imported ──────
 _ROOT = Path(__file__).parent.parent
@@ -119,7 +120,8 @@ def run(api_key: str, job_description: str) -> str:
         "Think step by step: first identify the company and role, then search, then synthesise."
     )
 
-    response = client.models.generate_content(
+    response = generate_with_retry(
+        client,
         model="gemini-2.5-flash",
         contents=user_message,
         config=types.GenerateContentConfig(
@@ -144,10 +146,9 @@ def node(state: CoverLetterState) -> dict:
             "business_problem_md": result,
             "current_agent": "agent_1_complete",
         }
-    except Exception as exc:
-        error_msg = f"Agent 1 (Business Problem Research) failed: {exc}"
-        return {
-            "business_problem_md": f"[AGENT 1 ERROR]\n\n{error_msg}",
-            "errors": [error_msg],
-            "current_agent": "agent_1_error",
-        }
+    except Exception as exc:             # ← catches everything including MaxRetriesExceeded
+        raise RuntimeError(
+            f"Agent X failed — pipeline stopped: {exc}"
+        ) from exc
+
+

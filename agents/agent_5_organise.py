@@ -21,6 +21,7 @@ if str(_ROOT) not in sys.path:
 from google import genai
 from google.genai import types
 from state import CoverLetterState
+from utils import generate_with_retry, MaxRetriesExceeded
 
 OUTPUT_FILE = _ROOT / "outputs" / "super_organised_content_for_cover_letter.md"
 
@@ -152,8 +153,9 @@ def run(api_key: str, unorganised_points_md: str) -> str:
         "Return ONLY the valid JSON object. No other text, no explanation, no fences."
     )
 
-    response = client.models.generate_content(
-        model="gemini-3-flash",
+    response = generate_with_retry(
+        client,
+        model="gemini-3-flash-preview",
         contents=user_message,
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
@@ -178,10 +180,7 @@ def node(state: CoverLetterState) -> dict:
             "organised_sections_md": result,
             "current_agent": "agent_5_complete",
         }
-    except Exception as exc:
-        error_msg = f"Agent 5 (Content Organiser) failed: {exc}"
-        return {
-            "organised_sections_md": f"[AGENT 5 ERROR]\n\n{error_msg}",
-            "errors": [error_msg],
-            "current_agent": "agent_5_error",
-        }
+    except Exception as exc:             # ← catches everything including MaxRetriesExceeded
+        raise RuntimeError(
+            f"Agent X failed — pipeline stopped: {exc}"
+        ) from exc
