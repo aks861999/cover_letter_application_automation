@@ -88,5 +88,5 @@ def node(state: CoverLetterState) -> dict:
         }
     except Exception as exc:             # ← catches everything including MaxRetriesExceeded
         raise RuntimeError(
-            f"Agent X failed — pipeline stopped: {exc}"
+            f"Agent 3 failed — pipeline stopped: {exc}"
         ) from exc
